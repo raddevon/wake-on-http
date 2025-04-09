@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: write
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -47,12 +51,16 @@ jobs:
       with:
         images: ghcr.io/${{ github.repository }}
         tags: |
-          # set latest tag for default branch
+          # Use Git tag as the primary version tag (e.g., v1.2.3 -> 1.2.3)
+          type=semver,pattern={{version}}
+          # Also tag main branch commit as 'latest'
           type=raw,value=latest,enable={{is_default_branch}}
-          # tag main branch as 'latest' and develop branch as 'develop'
+          # Tag develop branch commit as 'develop'
+          type=raw,value=develop,enable={{is_branch 'develop'}}
+          # Tag other branches with their name
           type=ref,event=branch
-          # tag commit sha
-          type=sha
+          # Tag commit sha as well for traceability
+          type=sha,prefix=sha-
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
