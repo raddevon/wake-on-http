@@ -93,13 +93,13 @@ Environment variables can be set for the container by passing them to a `docker 
 
 #### Using Docker
 1. **Pull the Docker image from a container registry**:
-   ```sh
+   ```bash
    docker pull ghcr.io/raddevon/wake-on-http:latest
    ```
 
 2. **Run the Docker container with network access to other systems on the host's network**:
    - **Using Host Networking**: This is the simplest method and recommended for most users.
-     ```sh
+     ```bash
      docker run -d \
        --network host \
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL=http://192.168.1.48:3000 \
@@ -122,7 +122,7 @@ Environment variables can be set for the container by passing them to a `docker 
          restart: always
      ```
    - **Using Macvlan Networking**: This method allows the container to appear as a separate device on the same physical network as the host.
-     ```sh
+     ```bash
      docker network create -d macvlan \
        --subnet=192.168.1.0/24 \
        --gateway=192.168.1.1 \
@@ -163,7 +163,7 @@ Environment variables can be set for the container by passing them to a `docker 
                gateway: 192.168.1.1
      ```
      To run the service using Docker Compose:
-     ```sh
+     ```bash
      docker-compose up -d
      ```
 
@@ -273,7 +273,7 @@ server {
 ### Testing
 
 To run tests, use the following command:
-```sh
+```bash
 python -m unittest discover
 ```
 
