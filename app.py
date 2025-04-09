@@ -9,6 +9,8 @@ import sys
 from urllib.parse import urljoin
 from waitress import serve
 
+__version__ = "0.1.0"
+
 # Set up logging
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s - %(levelname)s - %(message)s')
