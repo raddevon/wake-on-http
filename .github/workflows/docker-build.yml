@@ -56,7 +56,7 @@ jobs:
           # Also tag main branch commit as 'latest'
           type=raw,value=latest,enable={{is_default_branch}}
           # Tag develop branch commit as 'develop'
-          type=raw,value=develop,enable={{is_branch 'develop'}}
+          type=raw,value=develop,enable={{ github.ref_name == 'develop' }}
           # Tag other branches with their name
           type=ref,event=branch
           # Tag commit sha as well for traceability
