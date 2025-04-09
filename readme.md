@@ -1,16 +1,27 @@
-# Wake-on-HTTP Proxy
+# Wake on HTTP 🥱
 
 ## Overview
-This project is a Dockerized HTTP proxy that proxies a request to a system that may be asleep. If the machine does not respond to an awake request, the proxy will send a Wake-on-LAN magic packet and make further attempts. Once the machine is awake, it will proxy the request on through to the target and return the response.
+Wake on HTTP is a Dockerized HTTP proxy that proxies a request to a system that may not be powered on. If the machine does not respond to an awake request, the proxy will send a wake-on-LAN magic packet and continue checking for awakeness. Once the machine is awake, Wake on HTTP will proxy the request through to the target and return the response.
 
 ## Setup Instructions
 
-### Prerequisites
-- Docker (if you plan to run the application in a container)
+### High-Level
+At a high level, here's how you will set up and use Wake on HTTP:
+
+1. Configure wake-on-LAN on a machine hosting some service you want to be able to access on-demand.
+2. Bring up a Wake on HTTP Docker container, configuring as many services as you want to be able to proxy to. Provide at least a host, base URL, awake check endpoint, and MAC address.
+3. Configure a reverse proxy on an always-on machine to proxy requests on a host (individual or wildcard) to your Wake on HTTP container.
+4. When accessing a service on the possibly powered off, use the host you configured in Wake on HTTP instead of the direct host or IP.
+
+If everything is configured properly, Wake on HTTP will proxy requests to the target service after waking the machine (if necessary).
+
+Configuring wake-on-LAN is outside the scope of this document and accessing via the configured host is pretty straightforward, but let's dive into the other two steps: bringing up the container with service configurations and configuring a reverse-proxy.
 
 ### Configuration
 
 #### Services Configuration
+**Services** are individual targets to which you may proxy requests through Wake on HTTP.
+
 You may configure services either via a `services.yaml` file or using environment variables. If the same service (i.e., a service with a common host) is configured in both environment variables and in `services.yaml`, the environment variable configuration will take precedence. Individual service config values can also be overridden via environment variables.
 
 1. **Using `services.yaml`**:
@@ -32,7 +43,7 @@ You may configure services either via a `services.yaml` file or using environmen
    
    Bind this file as a Docker volume at `/config/services.yaml` on the container or specify a different path on the container by setting `SERVICES_CONFIG_PATH`.
 
-   The example above defines two services. To illustrate how configuration maps to the proxy algorithm, I'll describe one of them. The first service matches requests with a `Host` header value of `media.wake.mydomain.com`. Before making the proxied request, this app will check for awakeness by sending up to 15 requests (number specified by `max_retries`) to `http://192.168.1.48:3000/health` (`base_url` + `awake_check_endpoint`) with 3 seconds between attempts (interval specified by `poll_interval`) and a timeout on each attempt of 3 seconds (specified by `awake_request_timeout`). If the service is not awake and does not respond to an awake test attempt, a magic packet will be sent to `FF:FF:FF:FF:FF:FF` before the next attempt. Once an awake check attempt succeeds (i.e., returns *any* response), the request will be proxied and the response returned unless it takes more than 15 seconds to respond (specified by `request_timeout`).
+   The example above defines two services. To illustrate how configuration maps to the proxy algorithm, I'll describe one of them. The first service matches requests with a `Host` header value of `media.wake.mydomain.com`. Before sending the proxied request, Wake on HTTP will check for awakeness by sending up to 15 requests (number specified by `max_retries`) to `http://192.168.1.48:3000/health` (`base_url` + `awake_check_endpoint`) with 3 seconds between attempts (interval specified by `poll_interval`) and a timeout on each attempt of 3 seconds (specified by `awake_request_timeout`). If the service is not awake and does not respond to an awake test attempt, a magic packet will be sent to `FF:FF:FF:FF:FF:FF` before the next attempt. Once an awake check attempt succeeds (i.e., returns a good response code), the request will be proxied and the response returned unless it takes more than 15 seconds to respond (specified by `request_timeout`).
 
    **Service Configuration Options in YAML**:
    - The top-level key in the YAML should be the hostname that will be matched against the incoming request's `Host` header
@@ -46,10 +57,10 @@ You may configure services either via a `services.yaml` file or using environmen
 
 2. **Using Environment Variables**:
    - Set environment variables for each service. For example, to configure a service named `media`, you would set:
-     ```sh
-     export SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL=http://192.168.1.48:3000
-     export SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT=/health
-     export SERVICE_MEDIA.WAKE.MYDOMAIN.COM_MAC_ADDRESS=FF:FF:FF:FF:FF:FF
+     ```
+     SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL=http://192.168.1.48:3000
+     SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT=/health
+     SERVICE_MEDIA.WAKE.MYDOMAIN.COM_MAC_ADDRESS=FF:FF:FF:FF:FF:FF
      ```
 
    **Environment Variable Format**:
@@ -76,12 +87,14 @@ You may configure services either via a `services.yaml` file or using environmen
 - `GLOBAL_REQUEST_TIMEOUT`: Timeout for the final HTTP request in seconds (default: `5`)
 - `GLOBAL_AWAKE_REQUEST_TIMEOUT`: Timeout for server awake check requests in seconds (defaults to the same value as `GLOBAL_REQUEST_TIMEOUT`)
 
+Environment variables can be set for the container by passing them to a `docker run` command with the `-e` switch or in the docker-compose file's `environment` section. See below for examples.
+
 ### Running the Application
 
 #### Using Docker
 1. **Pull the Docker image from a container registry**:
    ```sh
-   docker pull your_image_name
+   docker pull ghcr.io/raddevon/wake-on-http:latest
    ```
 
 2. **Run the Docker container with network access to other systems on the host's network**:
@@ -92,7 +105,21 @@ You may configure services either via a `services.yaml` file or using environmen
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL=http://192.168.1.48:3000 \
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_MAC_ADDRESS=FF:FF:FF:FF:FF:FF \
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT=/health \
-       your_image_name
+       ghcr.io/raddevon/wake-on-http:latest
+     ```
+
+     with Docker Compose:
+
+     ```yaml
+     services:
+       wake-on-http:
+         image: ghcr.io/raddevon/wake-on-http:latest
+         network_mode: host
+         environment:
+           SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL: http://192.168.1.48:3000
+           SERVICE_MEDIA.WAKE.MYDOMAIN.COM_MAC_ADDRESS: FF:FF:FF:FF:FF:FF
+           SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT: /health
+         restart: always
      ```
    - **Using Macvlan Networking**: This method allows the container to appear as a separate device on the same physical network as the host.
      ```sh
@@ -108,15 +135,15 @@ You may configure services either via a `services.yaml` file or using environmen
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_BASE_URL=http://192.168.1.48:3000 \
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_MAC_ADDRESS=FF:FF:FF:FF:FF:FF \
        -e SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT=/health \
-       your_image_name
+       ghcr.io/raddevon/wake-on-http:latest
      ```
-   - **Using Docker Compose**: This method is useful for managing multiple services.
+
+    with Docker Compose:
+       
      ```yaml
-     version: '3.8'
-     
      services:
        wol-proxy:
-         image: your_image_name
+         image: ghcr.io/raddevon/wake-on-http:latest
          networks:
            my_macvlan_network:
              ipv4_address: 192.168.1.100  # Optional: Assign a specific IP
@@ -142,9 +169,9 @@ You may configure services either via a `services.yaml` file or using environmen
 
 ### Reverse Proxy Configuration
 
-When configuring a reverse proxy, it is convenient to configure a wildcard host for the Wake-on-HTTP configuration if you will have multiple services proxied through Wake-on-HTTP. This also makes it very easy to add services without touching your reverse proxy configuration.
+When configuring a reverse proxy, it is convenient to configure a wildcard host for the Wake on HTTP configuration if you will have multiple services proxied through it. This also makes it very easy to add services without touching your reverse proxy configuration.
 
-Your use case may not work with this model though, so you can also configure individual hosts.
+Your use case may not work with this model though, so you can also configure individual hosts. I'll demonstrate both in a few popular HTTP servers.
 
 #### Caddy
 ##### Wildcard Host (`*.wake.mydomain.com`)
@@ -153,6 +180,9 @@ Your use case may not work with this model though, so you can also configure ind
     reverse_proxy localhost:3000
 }
 ```
+
+> [!IMPORTANT]  
+> If you're like me, you may have been using Caddy's handy automatic SSL without ever configuring [DNS challenges](https://caddyserver.com/docs/automatic-https#dns-challenge). If that's the case, you'll want to read up on this as it will be required to obtain a SSL certificate for your wildcard host. It can be a bit of a pain, so that may be reason enough for you to use the individual hosts method below.
 
 ##### Individual Hosts (`media.wake.mydomain.com`, `photos.wake.mydomain.com`)
 ```caddyfile
@@ -169,11 +199,9 @@ photos.wake.mydomain.com {
 ##### Wildcard Host (`*.wake.mydomain.com`)
 Assuming you are using Traefik with Docker labels, you can use the following configuration:
 ```yaml
-version: '3.8'
-
 services:
   wol-proxy:
-    image: your_image_name
+    image: ghcr.io/raddevon/wake-on-http:latest
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.wol-proxy.rule=HostRegexp(`{subdomain}.wake.mydomain.com`)"
@@ -182,13 +210,14 @@ services:
   # Other services...
 ```
 
+> [!IMPORTANT]  
+> I'm guessing Traefik will require DNS challenge configuration for the wildcard host configuration method, but since I don't use Traefik myself, I don't know exactly what that entails. If you use Traefik and end up configuring this, it would be awesome if you would submit a PR to update this message with relevant links that might help other Traefik users in the future.
+
 ##### Individual Hosts (`media.wake.mydomain.com`, `photos.wake.mydomain.com`)
 ```yaml
-version: '3.8'
-
 services:
   wol-proxy:
-    image: your_image_name
+    image: ghcr.io/raddevon/wake-on-http:latest
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.media.rule=Host(`media.wake.mydomain.com`)"
@@ -247,10 +276,6 @@ To run tests, use the following command:
 ```sh
 python -m unittest discover
 ```
-
-## Dockerfile
-
-The `Dockerfile` is configured to install all necessary dependencies and set up the environment.
 
 ## License
 GPL License
