@@ -121,6 +121,12 @@ Environment variables can be set for the container by passing them to a `docker 
            SERVICE_MEDIA.WAKE.MYDOMAIN.COM_AWAKE_CHECK_ENDPOINT: /health
          restart: always
      ```
+
+     To run the service using Docker Compose:
+     ```bash
+     docker-compose up -d
+     ```
+
    - **Using Macvlan Networking**: This method allows the container to appear as a separate device on the same physical network as the host.
      ```bash
      docker network create -d macvlan \
@@ -138,7 +144,7 @@ Environment variables can be set for the container by passing them to a `docker 
        ghcr.io/raddevon/wake-on-http:latest
      ```
 
-    with Docker Compose:
+     with Docker Compose:
        
      ```yaml
      services:
@@ -162,6 +168,7 @@ Environment variables can be set for the container by passing them to a `docker 
              - subnet: 192.168.1.0/24
                gateway: 192.168.1.1
      ```
+
      To run the service using Docker Compose:
      ```bash
      docker-compose up -d
